@@ -44,7 +44,16 @@ def flatten_params(params):
 
 def start_run(run_name, params):
     """Open an MLflow run and log hyperparameters. Returns the run."""
+    from mlflow.exceptions import MlflowException
+
     mlflow.set_tracking_uri(TRACKING_URI)
+    try:
+        # Relative artifact location keeps the store portable: mlruns.db +
+        # the mlruns/ directory can be zipped, moved to another machine and
+        # browsed there with `mlflow ui --backend-store-uri sqlite:///mlruns.db`.
+        mlflow.create_experiment(EXPERIMENT, artifact_location="./mlruns")
+    except MlflowException:
+        pass  # experiment already exists; keep its artifact location
     mlflow.set_experiment(EXPERIMENT)
     run = mlflow.start_run(run_name=run_name)
     mlflow.log_params(flatten_params(params))
