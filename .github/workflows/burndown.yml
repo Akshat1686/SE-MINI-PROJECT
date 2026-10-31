@@ -1,5 +1,6 @@
-# Sprint burndown: redrawn whenever a backlog issue is closed or reopened, and on demand.
-# The charts are shown on the run's summary page and kept as the "burndown" artifact.
+# Sprint metrics: redrawn whenever a backlog issue is closed or reopened, and on demand.
+# The charts are committed to docs/sprint-metrics/ (browsable in the repo), shown on
+# the run's summary page, and kept as the "burndown" artifact.
 name: Burndown
 
 on:
@@ -8,14 +9,22 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: read
+
+# Issue events can fire in quick succession; run them one at a time so the
+# commit-back pushes below never race each other.
+concurrency:
+  group: sprint-metrics
+  cancel-in-progress: false
 
 jobs:
   burndown:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -23,10 +32,21 @@ jobs:
       - name: Draw the charts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python .github/scripts/burndown.py burndown
+        run: python .github/scripts/burndown.py docs/sprint-metrics
       - name: Show the tables on the summary page
-        run: cat burndown/burndown.md >> "$GITHUB_STEP_SUMMARY"
+        run: cat docs/sprint-metrics/burndown.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Commit updated metrics
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/sprint-metrics
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update sprint metrics (burndown, velocity, retrospectives)"
+            git push origin "HEAD:${{ github.ref_name }}"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: burndown
-          path: burndown/
+          path: docs/sprint-metrics/
